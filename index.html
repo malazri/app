@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>AppHub updated Admin</title>
+<title>AppHub Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -685,15 +685,15 @@ Content-Type: application/json</div>
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 // IMPORTANT: Replace these with your actual Supabase credentials
 // Or use the Configuration page to set them dynamically
-let SUPABASE_URL = localStorage.getItem('sb_url') || 'https://hksxehxhdlzqmzrqspjc.supabase.co';
-let SUPABASE_KEY = localStorage.getItem('sb_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhrc3hlaHhoZGx6cW16cnFzcGpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE2NTI2MzYsImV4cCI6MjA4NzIyODYzNn0.IrMUz0wss2qoJEXqD6Q2hlXa5J13i-_2VYxAUM_R5tY';
+let SUPABASE_URL = localStorage.getItem('sb_url') || 'YOUR_SUPABASE_URL';
+let SUPABASE_KEY = localStorage.getItem('sb_key') || 'YOUR_SUPABASE_ANON_KEY';
 
-let supabase = null;
+let sbClient = null;
 let allApps = [];
 let currentUser = null;
 
 function initSupabase() {
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 }
 
 // ─── BOOT ────────────────────────────────────────────────────────────────────
@@ -706,7 +706,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
   initSupabase();
 
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await sbClient.auth.getSession();
   if (session) {
     currentUser = session.user;
     showApp();
@@ -724,7 +724,7 @@ async function login() {
   btn.innerHTML = '<span class="spinner"></span>';
   err.style.display = 'none';
 
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
 
   btn.disabled = false;
   btn.innerHTML = 'Sign In';
@@ -740,7 +740,7 @@ async function login() {
 }
 
 async function logout() {
-  await supabase.auth.signOut();
+  await sbClient.auth.signOut();
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
 }
@@ -782,7 +782,7 @@ function saveConfig() {
 
 // ─── LOAD APPS ────────────────────────────────────────────────────────────────
 async function loadApps() {
-  const { data, error } = await supabase
+  const { data, error } = await sbClient
     .from('apps')
     .select('*')
     .order('created_at', { ascending: false });
@@ -919,9 +919,9 @@ async function saveApp() {
 
   let error;
   if (id) {
-    ({ error } = await supabase.from('apps').update(payload).eq('id', id));
+    ({ error } = await sbClient.from('apps').update(payload).eq('id', id));
   } else {
-    ({ error } = await supabase.from('apps').insert(payload));
+    ({ error } = await sbClient.from('apps').insert(payload));
   }
 
   btn.disabled = false; btn.innerHTML = 'Save App';
@@ -935,7 +935,7 @@ async function saveApp() {
 
 // ─── ACTIONS ──────────────────────────────────────────────────────────────────
 async function toggleActive(id, current) {
-  const { error } = await supabase.from('apps').update({ is_active: !current }).eq('id', id);
+  const { error } = await sbClient.from('apps').update({ is_active: !current }).eq('id', id);
   if (error) { toast('Error: ' + error.message, 'error'); return; }
   toast(current ? 'App hidden' : 'App activated', 'success');
   loadApps();
@@ -943,7 +943,7 @@ async function toggleActive(id, current) {
 
 async function deleteApp(id, name) {
   if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
-  const { error } = await supabase.from('apps').delete().eq('id', id);
+  const { error } = await sbClient.from('apps').delete().eq('id', id);
   if (error) { toast('Error: ' + error.message, 'error'); return; }
   toast(`"${name}" deleted`, 'success');
   loadApps();
