@@ -152,6 +152,14 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .toggle input:checked+.toggle-slider{background:var(--accent);border-color:var(--accent);}
 .toggle input:checked+.toggle-slider:before{transform:translateX(18px);background:#fff;}
 
+/* Required-apps checkbox list */
+.req-app-row{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:4px;font-size:12px;color:var(--text2);cursor:pointer;}
+.req-app-row:hover{background:var(--surface);}
+.req-app-row input{accent-color:var(--accent);cursor:pointer;}
+.req-app-row .req-name{color:var(--text);font-weight:500;}
+.req-app-row .req-pkg{color:var(--text3);font-family:var(--mono);font-size:10px;}
+.req-app-empty{color:var(--text3);font-size:12px;padding:6px;text-align:center;}
+
 /* ── CONFIG ── */
 .config-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;max-width:600px;margin-bottom:20px;}
 .config-card h3{font-size:15px;font-weight:600;margin-bottom:16px;}
@@ -320,6 +328,11 @@ Content-Type: application/json</div>
       <div class="field form-col-full"><label>APK URL (GitHub Release) *</label><input type="url" id="f-apk" placeholder="https://github.com/user/repo/releases/download/v1.0/app.apk"/></div>
       <div class="field form-col-full"><label>Icon URL</label><input type="url" id="f-icon" placeholder="https://…"/></div>
       <div class="field form-col-full"><label>Changelog</label><textarea id="f-changelog" placeholder="- Bug fixes&#10;- New feature added"></textarea></div>
+      <div class="field form-col-full">
+        <label>Requires these apps to work</label>
+        <small style="color:var(--text3);font-size:11px;display:block;margin-bottom:6px;">Selected apps will be installed automatically alongside this one</small>
+        <div id="f-required-apps" style="display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px;background:var(--surface2);"></div>
+      </div>
     </div>
     <div class="toggle-row">
       <div><label>Active</label><small>Hidden apps won't appear in the user app</small></div>
@@ -355,8 +368,8 @@ Content-Type: application/json</div>
 
 <script>
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-let SUPABASE_URL = localStorage.getItem('sb_url') || 'https://hksxehxhdlzqmzrqspjc.supabase.co';
-let SUPABASE_KEY = localStorage.getItem('sb_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhrc3hlaHhoZGx6cW16cnFzcGpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE2NTI2MzYsImV4cCI6MjA4NzIyODYzNn0.IrMUz0wss2qoJEXqD6Q2hlXa5J13i-_2VYxAUM_R5tY';
+let SUPABASE_URL = localStorage.getItem('sb_url') || 'YOUR_SUPABASE_URL';
+let SUPABASE_KEY = localStorage.getItem('sb_key') || 'YOUR_SUPABASE_ANON_KEY';
 let sbClient = null;
 let allApps = [];
 let allCategories = []; // stored in localStorage as JSON array
@@ -390,6 +403,35 @@ function populateCategorySelect() {
     if (c === current) opt.selected = true;
     sel.appendChild(opt);
   });
+}
+
+// Populates the "Requires these apps" checkbox list.
+// excludePackage: the app currently being edited (can't require itself).
+// preselected: array of package_names to check by default (when editing).
+function populateRequiredAppsList(excludePackage, preselected) {
+  const container = document.getElementById('f-required-apps');
+  const candidates = (allApps || []).filter(a => a.package_name !== excludePackage);
+
+  if (candidates.length === 0) {
+    container.innerHTML = '<div class="req-app-empty">No other apps in catalog yet</div>';
+    return;
+  }
+
+  container.innerHTML = candidates.map(a => {
+    const checked = (preselected || []).includes(a.package_name) ? 'checked' : '';
+    const safeName = (a.name || '').replace(/"/g, '&quot;');
+    return `
+      <label class="req-app-row">
+        <input type="checkbox" value="${a.package_name}" ${checked} />
+        <span class="req-name">${safeName}</span>
+        <span class="req-pkg">${a.package_name}</span>
+      </label>`;
+  }).join('');
+}
+
+function getSelectedRequiredApps() {
+  return Array.from(document.querySelectorAll('#f-required-apps input[type="checkbox"]:checked'))
+    .map(cb => cb.value);
 }
 
 // ─── BOOT ────────────────────────────────────────────────────────────────────
@@ -526,6 +568,14 @@ function renderApps(apps) {
         <span class="badge badge-cat">${escHtml(app.category||'General')}</span>
       </div>
       <div class="app-url" title="${escHtml(app.apk_url)}">🔗 ${escHtml(app.apk_url)}</div>
+      ${(app.required_apps && app.required_apps.length)
+        ? `<div class="app-url" style="color:var(--accent);opacity:0.85;">🔗 Requires: ${
+            app.required_apps.map(pkg => {
+              const dep = allApps.find(a => a.package_name === pkg);
+              return escHtml(dep ? dep.name : pkg);
+            }).join(', ')
+          }</div>`
+        : ''}
       <div class="app-actions">
         <button class="btn btn-ghost btn-sm" onclick='openEditModal(${JSON.stringify(app)})'>✏️ Edit</button>
         <button class="btn btn-ghost btn-sm" onclick="toggleActive('${app.id}',${app.is_active})">
@@ -546,6 +596,7 @@ function openAddModal() {
   document.getElementById('f-minver').value = '1';
   document.getElementById('f-category').value = allCategories[0] || '';
   document.getElementById('f-active').checked = true;
+  populateRequiredAppsList(null, []);
   document.getElementById('app-modal').classList.add('open');
 }
 
@@ -562,6 +613,7 @@ function openEditModal(app) {
   document.getElementById('f-changelog').value = app.changelog||'';
   document.getElementById('f-category').value = app.category||'';
   document.getElementById('f-active').checked = app.is_active;
+  populateRequiredAppsList(app.package_name, app.required_apps || []);
   document.getElementById('app-modal').classList.add('open');
 }
 
@@ -582,6 +634,7 @@ async function saveApp() {
     changelog: document.getElementById('f-changelog').value.trim()||null,
     category: document.getElementById('f-category').value||'General',
     is_active: document.getElementById('f-active').checked,
+    required_apps: getSelectedRequiredApps(),
   };
   const btn = document.getElementById('save-btn');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span>';
